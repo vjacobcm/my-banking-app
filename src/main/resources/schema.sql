@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS accounts (
 );
 
 CREATE TABLE IF NOT EXISTS transactions (
-  transaction_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  transaction_id INTEGER AUTO_INCREMENT PRIMARY KEY,
   debitor_account VARCHAR(15) NOT NULL,
   creditor_account VARCHAR(15) NOT NULL,
   amount DECIMAL(15,2) NOT NULL CHECK (amount>0),

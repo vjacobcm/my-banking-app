@@ -1,10 +1,6 @@
 package com.demo.mybankingapp.entity;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
+import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.Getter;
@@ -15,7 +11,6 @@ import org.hibernate.annotations.UuidGenerator;
 import java.util.UUID;
 @Data
 @Entity
-@AllArgsConstructor
 @NoArgsConstructor
 @Getter
 @Setter
@@ -23,7 +18,8 @@ import java.util.UUID;
 public class BankTransaction {
     @Id
     @Column(name="transaction_id")
-    public String transactionID;
+    @GeneratedValue(strategy = GenerationType.AUTO)
+    public int transactionID;
 
     @Column(name="debitor_account")
     public String debitor;

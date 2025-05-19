@@ -6,13 +6,19 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 import java.util.UUID;
 
 @Data
 @Entity
 @AllArgsConstructor
+@Getter
+@Setter
 @Table(name="accounts")
+@NoArgsConstructor
 public class BankAccount {
     @Id
     @Column(name="account_id")

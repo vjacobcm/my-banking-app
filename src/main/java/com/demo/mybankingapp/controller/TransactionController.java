@@ -8,6 +8,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
+
 @RestController
 public class TransactionController {
     
@@ -17,6 +19,10 @@ public class TransactionController {
     @PostMapping(value="/api/add-transaction")
     ResponseEntity addTransaction(@RequestBody BankTransferRequestDTO bankTransferRequestDTO){
         return this.transactionProcessingService.addTransaction(bankTransferRequestDTO);
+    }
+    @PostMapping(value="/api/add-transactions")
+    ResponseEntity addTransactions(@RequestBody List<BankTransferRequestDTO> bankTransferRequestDTOs){
+        return this.transactionProcessingService.addTransactions(bankTransferRequestDTOs);
     }
     
 }

@@ -10,6 +10,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
+
 @Service
 @Slf4j
 public class TransactionProcessingServiceImpl implements TransactionProcessingService {
@@ -42,6 +44,24 @@ public class TransactionProcessingServiceImpl implements TransactionProcessingSe
             newTransaction.setProcessed(false);
             
             transactionRepository.save(newTransaction);
+            return ResponseEntity.status(HttpStatus.CREATED).build();
+        }
+        catch (Exception e){
+            log.error(e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+        }
+    }
+    @Override
+    public ResponseEntity addTransactions(List<BankTransferRequestDTO> bankTransferRequestDTOs){
+        try{
+            bankTransferRequestDTOs.forEach(bankTransferRequestDTO -> {
+                BankTransaction newTransaction = new BankTransaction();
+                newTransaction.setDebitor(bankTransferRequestDTO.getDebitAccountNumber());
+                newTransaction.setCreditor(bankTransferRequestDTO.getCreditAccountNumber());
+                newTransaction.setAmount(bankTransferRequestDTO.getAmount());
+                newTransaction.setProcessed(false);
+                transactionRepository.save(newTransaction);
+            });
             return ResponseEntity.status(HttpStatus.CREATED).build();
         }
         catch (Exception e){

@@ -9,6 +9,6 @@ import java.util.Optional;
 
 @Repository
 public interface TransactionRepository extends CrudRepository<BankTransaction, String> {
-    @Query(nativeQuery = true, value = "SELECT * FROM transactions t WHERE t.is_proccessed = false")
+    @Query(nativeQuery = true, value = "SELECT * FROM transactions t WHERE t.is_processed = false")
     Optional<List<BankTransaction>> findByIsProcessed();
 }

@@ -1,7 +1,6 @@
 package com.demo.mybankingapp.service.impl;
 
 import com.demo.mybankingapp.dto.BankTransferRequestDTO;
-import com.demo.mybankingapp.entity.BankAccount;
 import com.demo.mybankingapp.entity.BankTransaction;
 import com.demo.mybankingapp.repository.AccountRepository;
 import com.demo.mybankingapp.repository.TransactionRepository;
@@ -11,13 +10,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
-
-import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
-import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
+import java.util.stream.Collectors;
 
 @Service
 @Slf4j
@@ -28,64 +26,54 @@ public class TransactionProcessingServiceImpl implements TransactionProcessingSe
     @Autowired
     private AccountRepository accountRepository;
     private final ExecutorService executor = Executors.newFixedThreadPool(4);
-    
     public ResponseEntity processTransactions() {
-        // fetch all transactions, filter out processed ones (unprocessed are left)
-        // for each transaction left, create a thread, transfer funds
+        List<BankTransaction> transactions = transactionRepository.findByIsProcessed()
+                .orElse(Collections.emptyList());
 
-        // what's the industry practice when it comes to making queries in general
-        // less queries better ??
-        Optional<List<BankTransaction>> transactions = transactionRepository.findByIsProcessed();
-        
-        List<BankTransaction> unprocessedTransactions = transactions.isPresent() ? transactions.get() : new ArrayList<>();
-        log.info("unprocessedTransactions size: {} transactions",unprocessedTransactions.size());
-        
-        List<Future<String>> futures = new ArrayList<>();
-
-        for (BankTransaction transaction : unprocessedTransactions) {
-            futures.add(executor.submit(() -> {
-                try {
-                    var checkDebitor = accountRepository.findByAccountNumber(transaction.getDebitor());
-                    var checkCreditor = accountRepository.findByAccountNumber(transaction.getCreditor());
-
-                    if (checkDebitor.isEmpty() || checkCreditor.isEmpty()) {
-                        return "Missing account for transaction ID: " + transaction.getTransactionID();
-                    }
-
-                    BankAccount debitor = Optional.ofNullable(checkDebitor.get()).orElse(null);
-                    BankAccount creditor = Optional.ofNullable(checkCreditor.get()).orElse(null);
-
-                    if (debitor.getBalance() < transaction.getAmount()) {
-                        return "Insufficient funds for transaction ID: " + transaction.getTransactionID();
-                    }
-
-                    debitor.setBalance(debitor.getBalance() - transaction.getAmount());
-                    creditor.setBalance(creditor.getBalance() + transaction.getAmount());
-
-                    accountRepository.save(debitor);
-                    accountRepository.save(creditor);
-
-                    transaction.setProcessed(true);
-                    transactionRepository.save(transaction);
-
-                    return "Transaction ID " + transaction.getTransactionID() + " processed successfully.";
-
-                } catch (Exception e) {
-                    return "Error processing transaction ID: " + transaction.getTransactionID() + " - " + e.getMessage();
-                }
-            }));
+        if (transactions.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.OK).body(List.of("No unprocessed transactions found."));
         }
 
-        List<String> results = new ArrayList<>();
-        for (Future<String> future : futures) {
-            try {
-                results.add(future.get());
-            } catch (Exception e) {
-                results.add("Error retrieving result: " + e.getMessage());
+        List<CompletableFuture<String>> futures = transactions.stream()
+                .map(ts -> CompletableFuture.supplyAsync(() -> processSingleTransaction(ts), executor))
+                .toList();
+
+        List<String> results = futures.stream()
+                .map(CompletableFuture::join)
+                .collect(Collectors.toList());
+
+        return ResponseEntity.status(HttpStatus.OK).body(results);
+    }
+    private String processSingleTransaction(BankTransaction transaction) {
+        try {
+            var debitorOpt = accountRepository.findByAccountNumber(transaction.getDebitor());
+            var creditorOpt = accountRepository.findByAccountNumber(transaction.getCreditor());
+
+            if (debitorOpt.isEmpty() || creditorOpt.isEmpty()) {
+                return "Transaction ID " + transaction.getTransactionID() + ": Failed - Missing account";
             }
-        }
 
-        return ResponseEntity.ok(results);
+            var debitor = debitorOpt.get();
+            var creditor = creditorOpt.get();
+
+            if (debitor.getBalance() < transaction.getAmount()) {
+                return "Transaction ID " + transaction.getTransactionID() + ": Failed - Insufficient funds";
+            }
+
+            debitor.setBalance(debitor.getBalance() - transaction.getAmount());
+            creditor.setBalance(creditor.getBalance() + transaction.getAmount());
+
+            accountRepository.save(debitor);
+            accountRepository.save(creditor);
+
+            transaction.setProcessed(true);
+            transactionRepository.save(transaction);
+
+            return "Transaction ID " + transaction.getTransactionID() + ": Success";
+
+        } catch (Exception e) {
+            return "Transaction ID " + transaction.getTransactionID() + ": Error - " + e.getMessage();
+        }
     }
     
     @Override

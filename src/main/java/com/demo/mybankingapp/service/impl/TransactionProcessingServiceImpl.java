@@ -13,6 +13,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ExecutorService;
@@ -33,45 +34,56 @@ public class TransactionProcessingServiceImpl implements TransactionProcessingSe
     @Override
     public ResponseEntity processTransactions() {
         Optional<List<BankTransaction>> transactions = transactionRepository.findByIsNotProcessed();
-
-        List<Future<String>> futures = new ArrayList<>();
-        if(transactions.isPresent()) {
-            List<BankTransaction> unprocessedTransactions = transactions.get();
-                for (BankTransaction transaction : unprocessedTransactions) {
-                    futures.add(executor.submit(() -> {
-                        try {
-                            var checkDebitor = accountRepository.findByAccountNumber(transaction.getDebitor());
-                            var checkCreditor = accountRepository.findByAccountNumber(transaction.getCreditor());
-
-                            if (checkDebitor.isEmpty() || checkCreditor.isEmpty()) { // can use optional .OrElse
-                                return "Missing account for transaction ID: " + transaction.getTransactionID();
-                            }
-
-                            BankAccount debitor = checkDebitor.get();
-                            BankAccount creditor = checkCreditor.get();
-
-                            if (debitor.getBalance() < transaction.getAmount()) { // can use optional .OrElse
-                                return "Insufficient funds for transaction ID: " + transaction.getTransactionID();
-                            }
-
-                            debitor.setBalance(debitor.getBalance() - transaction.getAmount());
-                            creditor.setBalance(creditor.getBalance() + transaction.getAmount());
-
-                            accountRepository.save(debitor);
-                            accountRepository.save(creditor);
-
-                            transaction.setProcessed(true);
-                            transactionRepository.save(transaction);
-
-                            return "Transaction ID " + transaction.getTransactionID() + " processed successfully.";
-
-                        } catch (Exception e) {
-                            return "Error processing transaction ID: " + transaction.getTransactionID() + " - " + e.getMessage();
-                        }
-                    }));
-                }
+        if (transactions.isEmpty()) {
+            return ResponseEntity.ok(Collections.emptyList());
         }
 
+        List<Future<String>> futures = submitTransactionTasks(transactions.get());
+        List<String> results = collectTaskResults(futures);
+
+        return ResponseEntity.ok(results);
+    }
+
+    private List<Future<String>> submitTransactionTasks(List<BankTransaction> transactions) {
+        List<Future<String>> futures = new ArrayList<>();
+
+        for (BankTransaction transaction : transactions) {
+            futures.add(executor.submit(() -> processSingleTransaction(transaction)));
+        }
+
+        return futures;
+    }
+    private String processSingleTransaction(BankTransaction transaction) {
+        try {
+            BankAccount debitor = accountRepository.findByAccountNumber(transaction.getDebitor())
+                    .orElse(null);
+            BankAccount creditor = accountRepository.findByAccountNumber(transaction.getCreditor())
+                    .orElse(null);
+
+            if (debitor == null || creditor == null) {
+                return "Missing account for transaction ID: " + transaction.getTransactionID();
+            }
+
+            if (debitor.getBalance() < transaction.getAmount()) {
+                return "Insufficient funds for transaction ID: " + transaction.getTransactionID();
+            }
+
+            debitor.setBalance(debitor.getBalance() - transaction.getAmount());
+            creditor.setBalance(creditor.getBalance() + transaction.getAmount());
+
+            accountRepository.save(debitor);
+            accountRepository.save(creditor);
+
+            transaction.setProcessed(true);
+            transactionRepository.save(transaction);
+
+            return "Transaction ID " + transaction.getTransactionID() + " processed successfully.";
+        } catch (Exception e) {
+            return "Error processing transaction ID: " + transaction.getTransactionID() + " - " + e.getMessage();
+        }
+    }
+
+    private List<String> collectTaskResults(List<Future<String>> futures) {
         List<String> results = new ArrayList<>();
         for (Future<String> future : futures) {
             try {
@@ -80,7 +92,7 @@ public class TransactionProcessingServiceImpl implements TransactionProcessingSe
                 results.add("Error retrieving result: " + e.getMessage());
             }
         }
-        return ResponseEntity.ok(results);
+        return results;
     }
 
     @Override

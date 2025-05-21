@@ -9,6 +9,5 @@ import java.util.List;
 
 public interface TransactionProcessingService {
     ResponseEntity processTransactions();
-    ResponseEntity addTransaction(BankTransferRequestDTO bankTransferRequestDTO);
     ResponseEntity addTransactions(List<BankTransferRequestDTO> bankTransferRequestDTOs);
 }

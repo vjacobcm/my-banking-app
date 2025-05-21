@@ -22,11 +22,7 @@ public class Controller {
 
     @Autowired
     private AccountService accountService;
-
-    @PostMapping(value="/api/add-transaction")
-    ResponseEntity addTransaction(@RequestBody BankTransferRequestDTO bankTransferRequestDTO){
-        return this.transactionProcessingService.addTransaction(bankTransferRequestDTO);
-    }
+    
     @PostMapping(value="/api/add-transactions")
     ResponseEntity addTransactions(@RequestBody List<BankTransferRequestDTO> bankTransferRequestDTOs){
         return this.transactionProcessingService.addTransactions(bankTransferRequestDTOs);
@@ -36,6 +32,12 @@ public class Controller {
     ResponseEntity addAccount(@RequestBody BankAccountRequestDTO accountDTO) {
         return accountService.addAccount(accountDTO);
     }
+
+    @PostMapping("/api/add-accounts")
+    ResponseEntity addAccounts(@RequestBody List<BankAccountRequestDTO> accountDTOs) {
+        return accountService.addAccounts(accountDTOs);
+    }
+    
     @GetMapping("/api/accounts")
     public ResponseEntity getAllAccounts() {
         return accountService.getAllAccounts();

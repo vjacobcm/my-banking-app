@@ -5,6 +5,7 @@ import com.demo.mybankingapp.entity.BankTransaction;
 import com.demo.mybankingapp.repository.AccountRepository;
 import com.demo.mybankingapp.repository.TransactionRepository;
 import com.demo.mybankingapp.service.TransactionProcessingService;
+import jakarta.transaction.Transactional;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -27,6 +28,7 @@ public class TransactionProcessingServiceImpl implements TransactionProcessingSe
     private AccountRepository accountRepository;
     private final ExecutorService executor = Executors.newFixedThreadPool(4);
     public ResponseEntity processTransactions() {
+        log.info("Starting to process transactions");
         List<BankTransaction> transactions = transactionRepository.findByIsProcessed()
                 .orElse(Collections.emptyList());
 
@@ -44,8 +46,10 @@ public class TransactionProcessingServiceImpl implements TransactionProcessingSe
 
         return ResponseEntity.status(HttpStatus.OK).body(results);
     }
+    @Transactional
     private String processSingleTransaction(BankTransaction transaction) {
         try {
+            log.info("Thread {} processing transactionId: {}", Thread.currentThread().getName(), transaction.transactionID);
             var debitorOpt = accountRepository.findByAccountNumber(transaction.getDebitor());
             var creditorOpt = accountRepository.findByAccountNumber(transaction.getCreditor());
 
@@ -64,6 +68,10 @@ public class TransactionProcessingServiceImpl implements TransactionProcessingSe
             creditor.setBalance(creditor.getBalance() + transaction.getAmount());
 
             accountRepository.save(debitor);
+            // or here
+//            if (Math.random() > 0.7) { // Introduce failure randomly
+//                throw new RuntimeException("Task failed on thread: " + Thread.currentThread().getName());
+//            } 
             accountRepository.save(creditor);
 
             transaction.setProcessed(true);

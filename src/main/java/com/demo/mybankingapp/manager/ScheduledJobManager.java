@@ -18,13 +18,13 @@ public class ScheduledJobManager {
     private TransactionProcessingService transactionProcessingService;
     
     @Scheduled(cron = "0 */1 * ? * *")
-    @SchedulerLock(name="taskLock",lockAtMostFor = "PT30S",lockAtLeastFor = "PT10S")
+//    @SchedulerLock(name="taskLock",lockAtMostFor = "PT30S",lockAtLeastFor = "PT10S")
     public void printMethod(){
         System.out.println("hello world!!! " + LocalDateTime.now());
     }
     
     @Scheduled(cron = "0 */1 * ? * *")
-    @SchedulerLock(name="transactionProcessingLock",lockAtMostFor = "PT30S",lockAtLeastFor = "PT10S")
+//    @SchedulerLock(name="transactionProcessingLock",lockAtMostFor = "PT30S",lockAtLeastFor = "PT10S")
     public void processTransactionsScheduledJob(){
         transactionProcessingService.processTransactions();
     }

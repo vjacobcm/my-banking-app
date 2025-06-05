@@ -57,14 +57,17 @@ public class TransactionProcessingServiceImpl implements TransactionProcessingSe
     public String processSingleTransaction(BankTransaction transaction) {
         String debitorAccNum = transaction.getDebitor();
         String creditorAccNum = transaction.getCreditor();
-
+        // sort first
+        // ensures that threads acquire locks in the same order
         List<String> lockOrder = Stream.of(debitorAccNum, creditorAccNum)
                 .sorted()
                 .toList();
-
+        // account number : java object
         Object lock1 = getLockForAccount(lockOrder.get(0));
         Object lock2 = getLockForAccount(lockOrder.get(1));
 
+        // only one thread can read/write the same account pair at a time
+        // other threads involving different accounts can proceed concurrently
         synchronized (lock1) {
             synchronized (lock2) {
                 try {
@@ -129,5 +132,41 @@ public class TransactionProcessingServiceImpl implements TransactionProcessingSe
 
     private Object getLockForAccount(String accountNumber){
         return accountLocks.computeIfAbsent(accountNumber, k -> new Object());
+    }
+
+    @Transactional
+    public String processSingleTransactionBugged(BankTransaction transaction) {
+        try {
+            log.info("Thread {} processing transactionId: {}", Thread.currentThread().getName(), transaction.transactionID);
+            var debitorOpt = accountRepository.findByAccountNumber(transaction.getDebitor());
+            var creditorOpt = accountRepository.findByAccountNumber(transaction.getCreditor());
+
+            if (debitorOpt.isEmpty() || creditorOpt.isEmpty()) {
+                return "Transaction ID " + transaction.getTransactionID() + ": Failed - Missing account";
+            }
+
+            var debitor = debitorOpt.get();
+            var creditor = creditorOpt.get();
+
+            if (debitor.getBalance() < transaction.getAmount()) {
+                return "Transaction ID " + transaction.getTransactionID() + ": Failed - Insufficient funds";
+            }
+
+            debitor.setBalance(debitor.getBalance() - transaction.getAmount());
+            creditor.setBalance(creditor.getBalance() + transaction.getAmount());
+
+            accountRepository.save(debitor);
+            // or here
+
+            accountRepository.save(creditor);
+
+            transaction.setProcessed(true);
+            transactionRepository.save(transaction);
+
+            return "Transaction ID " + transaction.getTransactionID() + ": Success";
+
+        } catch (Exception e) {
+            return "Transaction ID " + transaction.getTransactionID() + ": Error - " + e.getMessage();
+        }
     }
 }

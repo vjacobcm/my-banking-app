@@ -17,10 +17,6 @@ public interface AccountRepository extends JpaRepository<BankAccount, String> {
     @Query(nativeQuery = true, value = "SELECT * FROM accounts a "
     + "WHERE a.account_number = :account_number")
     Optional<BankAccount> findByAccountNumber(@Param("account_number") String accountNumber);
-
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("SELECT a FROM BankAccount a WHERE a.accountNumber = :account_number")
-    Optional<BankAccount> findForUpdate(@Param("account_number") String accountNumber);
-
+    
     List<BankAccount> findAll();
 }

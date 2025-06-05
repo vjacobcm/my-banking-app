@@ -20,10 +20,10 @@ public class ScheduledJobManager {
     @Scheduled(cron = "0 */1 * ? * *")
 //    @SchedulerLock(name="taskLock",lockAtMostFor = "PT30S",lockAtLeastFor = "PT10S")
     public void printMethod(){
-        System.out.println("hello world!!! " + LocalDateTime.now());
+        log.info("Executing transaction processing now (" + LocalDateTime.now() + ")");
     }
     
-    @Scheduled(cron = "0 */1 * ? * *")
+    @Scheduled(cron = "0 */2 * ? * *")
 //    @SchedulerLock(name="transactionProcessingLock",lockAtMostFor = "PT30S",lockAtLeastFor = "PT10S")
     public void processTransactionsScheduledJob(){
         transactionProcessingService.processTransactions();

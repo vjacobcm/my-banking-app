@@ -7,7 +7,9 @@ import com.demo.mybankingapp.repository.TransactionRepository;
 import com.demo.mybankingapp.service.TransactionProcessingService;
 import jakarta.transaction.Transactional;
 import lombok.extern.slf4j.Slf4j;
+import net.javacrumbs.shedlock.support.Utils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.env.Environment;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
@@ -30,19 +32,26 @@ public class TransactionProcessingServiceImpl implements TransactionProcessingSe
     @Autowired
     private AccountRepository accountRepository;
 
+    @Autowired
+    private Environment environment;
+
     private final ExecutorService executor = Executors.newFixedThreadPool(4);
 
     private final Map<String, Object> accountLocks = new ConcurrentHashMap<>();
 
     public ResponseEntity processTransactions() {
-        log.info("Starting to process transactions");
+        String port = environment.getProperty("server.port");
+        String hostName = port+"-"+ Utils.getHostname();
+        
+        log.info(hostName + " is starting to process transactions.");
         List<BankTransaction> transactions = transactionRepository.findByIsProcessed()
                 .orElse(Collections.emptyList());
 
         if (transactions.isEmpty()) {
+            log.info("No transactions to be processed.");
             return ResponseEntity.status(HttpStatus.OK).body(List.of("No unprocessed transactions found."));
         }
-
+        log.info(hostName +" will process {} transactions.", transactions.size());
         List<CompletableFuture<String>> futures = transactions.stream()
                 .map(ts -> CompletableFuture.supplyAsync(() -> processSingleTransaction(ts), executor))
                 .toList();
@@ -76,10 +85,9 @@ public class TransactionProcessingServiceImpl implements TransactionProcessingSe
                             transaction.getTransactionID());
 
                     var debitorOpt = accountRepository.findByAccountNumber(debitorAccNum);
+                    log.info("debitorOpt is {}", debitorOpt);
                     var creditorOpt = accountRepository.findByAccountNumber(creditorAccNum);
-
-                    log.info("debitorOpt is {}", debitorOpt.isPresent());
-                    log.info("creditorOpt is {}", creditorOpt.isPresent());
+                    log.info("creditorOpt is {}", creditorOpt);
 
                     if (debitorOpt.isEmpty() || creditorOpt.isEmpty()) {
                         return "Transaction ID " + transaction.getTransactionID() + ": Failed - Missing account";
@@ -89,18 +97,21 @@ public class TransactionProcessingServiceImpl implements TransactionProcessingSe
                     var creditor = creditorOpt.get();
 
                     if (debitor.getBalance() < transaction.getAmount()) {
+                        log.error("Transaction with ID {} has failed. (Invalid Account)", transaction.getTransactionID());
                         return "Transaction ID " + transaction.getTransactionID() + ": Failed - Insufficient funds";
                     }
 
                     debitor.setBalance(debitor.getBalance() - transaction.getAmount());
                     creditor.setBalance(creditor.getBalance() + transaction.getAmount());
+                    
 
                     accountRepository.save(debitor);
+                    // Errors could possibly occur here
                     accountRepository.save(creditor);
-
+                    log.info("AccountNumber: {} has successfully transferred {} EUR to AccountNumber: {}.", debitor.getAccountNumber(),transaction.getAmount(),creditor.getAccountNumber());
                     transaction.setProcessed(true);
                     transactionRepository.save(transaction);
-
+                    log.info("Transaction ID: {} is a success", transaction.getTransactionID());
                     return "Transaction ID " + transaction.getTransactionID() + ": Success";
 
                 } catch (Exception e) {
@@ -142,6 +153,7 @@ public class TransactionProcessingServiceImpl implements TransactionProcessingSe
             var creditorOpt = accountRepository.findByAccountNumber(transaction.getCreditor());
 
             if (debitorOpt.isEmpty() || creditorOpt.isEmpty()) {
+                log.error("Transaction with ID {} has failed. (Invalid Account)", transaction.getTransactionID());
                 return "Transaction ID " + transaction.getTransactionID() + ": Failed - Missing account";
             }
 
@@ -149,6 +161,7 @@ public class TransactionProcessingServiceImpl implements TransactionProcessingSe
             var creditor = creditorOpt.get();
 
             if (debitor.getBalance() < transaction.getAmount()) {
+                log.error("Transaction with ID {} has failed. (Insufficient funds)", transaction.getTransactionID());
                 return "Transaction ID " + transaction.getTransactionID() + ": Failed - Insufficient funds";
             }
 
@@ -156,8 +169,7 @@ public class TransactionProcessingServiceImpl implements TransactionProcessingSe
             creditor.setBalance(creditor.getBalance() + transaction.getAmount());
 
             accountRepository.save(debitor);
-            // or here
-
+            // Errors could possibly occur here
             accountRepository.save(creditor);
 
             transaction.setProcessed(true);
